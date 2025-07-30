@@ -51,7 +51,7 @@ contract Dex {
      * @param _amountIn The amount of _tokenIn to swap.
      * @return amountOut The amount of _tokenOut received.
      */
-    function buyToken(address _tokenIn, address _tokenOut, uint256 _amountIn) public view returns (uint256 amountOut) { // Changed to public view
+    function buyToken(address _tokenIn, address _tokenOut, uint256 _amountIn) public view returns (uint256 amountOut) {
         require(_amountIn > 0, "Dex: Amount in must be greater than zero");
         require(_tokenIn != _tokenOut, "Dex: Cannot swap same tokens");
         require((_tokenIn == DAI_ADDRESS && _tokenOut == USDC_ADDRESS) || (_tokenIn == USDC_ADDRESS && _tokenOut == DAI_ADDRESS), "Dex: Unsupported token pair");
@@ -88,7 +88,7 @@ contract Dex {
      * @param _amountIn The amount of _tokenIn to swap.
      * @return amountOut The amount of _tokenOut received.
      */
-    function sellToken(address _tokenIn, address _tokenOut, uint256 _amountIn) public view returns (uint256 amountOut) { // Changed to public view
+    function sellToken(address _tokenIn, address _tokenOut, uint256 _amountIn) public view returns (uint256 amountOut) {
         // This function's logic is identical to buyToken for a simple AMM,
         // as swaps are symmetrical. Renamed for conceptual clarity in arbitrage.
         amountOut = buyToken(_tokenIn, _tokenOut, _amountIn);
@@ -115,6 +115,16 @@ contract Dex {
         // For simplicity, let's assume 18 decimals for both tokens for now.
         // If tokens have different decimals, you'd need to adjust.
         price = (reserveB * (10**18)) / reserveA; // Price of 1 tokenA in tokenB units (scaled)
+    }
+
+    /**
+     * @notice Returns the current reserves of DAI and USDC in the DEX.
+     * @return daiReserve The current balance of DAI in the DEX.
+     * @return usdcReserve The current balance of USDC in the DEX.
+     */
+    function getReserves() external view returns (uint256 daiReserve, uint256 usdcReserve) {
+        daiReserve = IERC20(DAI_ADDRESS).balanceOf(address(this));
+        usdcReserve = IERC20(USDC_ADDRESS).balanceOf(address(this));
     }
 
 
