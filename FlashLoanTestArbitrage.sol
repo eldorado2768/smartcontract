@@ -1,160 +1,146 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {FlashLoanSimpleReceiverBase} from "@aave/core-v3/contracts/flashloan/base/FlashLoanSimpleReceiverBase.sol";
-import {IPoolAddressesProvider} from "@aave/core-v3/contracts/interfaces/IPoolAddressesProvider.sol";
-import {IERC20} from "@aave/core-v3/contracts/dependencies/openzeppelin/contracts/IERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {IDex} from "./IDex.sol"; // Import the IDex interface
 
-interface IDex {
-    function depositUSDC(uint256 _amount) external;
+contract FlashLoanArbitrageTest {
+    using SafeERC20 for IERC20;
 
-    function depositDAI(uint256 _amount) external;
+    // Address of the mock DEX contract, now using the IDex interface
+    IDex public immutable dex; 
 
-    function buyDAI() external;
+    // Arbitrage profit threshold (e.g., 0.01% profit)
+    uint256 public constant PROFIT_THRESHOLD = 100; // Represents 0.01% (100 basis points) for 10,000 basis points total
 
-    function sellDAI() external;
-}
+    // Constants for DAI and USDC token addresses (PLACEHOLDERS - YOU'LL UPDATE THESE AFTER DEPLOYING MOCK TOKENS)
+    address public constant DAI_ADDRESS = 0x0000000000000000000000000000000000000000; // Placeholder for Mock DAI
+    address public constant USDC_ADDRESS = 0x0000000000000000000000000000000000000000; // Placeholder for Mock USDC
 
-contract FlashLoanArbitrage is FlashLoanSimpleReceiverBase {
-    address payable owner;
+    // Event to log arbitrage results
+    event ArbitrageExecuted(
+        address indexed assetBorrowed,
+        uint256 amountBorrowed,
+        uint256 initialBalance,
+        uint256 finalBalance,
+        int256 profit
+    );
 
-    // Aave ERC20 Token addresses on Sepolia network
-    address private immutable daiAddress =
-        0x3e622317f8C93f7328350cF0B56d9eD4C620C5d6;
-    address private immutable usdcAddress =
-       0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238;
-        
-    address private dexContractAddress; //Set in constructor argument
-    
-
-    IERC20 private dai;
-    IERC20 private usdc;
-    IDex private dexContract;
-
-    constructor(address _addressProvider,address _dexContractAddress) //add dex Contract address as a parameter of constructor
-        
-        FlashLoanSimpleReceiverBase(IPoolAddressesProvider(_addressProvider))
-    {
-        require(_addressProvider != address(0), "FLA: Zero address provider");
-        require(_dexContractAddress != address(0), "FLA: Zero DEX address");
-        require(daiAddress != address(0), "FLA: Zero DAI address constant"); // Add this
-        require(usdcAddress != address(0), "FLA: Zero USDC address constant"); // Add this
-        
-        owner = payable(msg.sender);
-        dexContractAddress = _dexContractAddress; // Set the Dex contract address
-
-        dai = IERC20(daiAddress);
-        usdc = IERC20(usdcAddress);
-        dexContract = IDex(dexContractAddress);
+    // Constructor to initialize the DEX contract address
+    constructor(address _dex) {
+        // Ensure the DEX address is not zero
+        require(_dex != address(0), "FLA: Zero DEX address");
+        dex = IDex(_dex); 
+        // These checks will be valid once you update the constants after mock token deployment
+        // require(DAI_ADDRESS != address(0), "FLA: Zero DAI address constant");
+        // require(USDC_ADDRESS != address(0), "FLA: Zero USDC address constant");
     }
 
     /**
-        This function is called after your contract has received the flash loaned amount
+     * @notice Simulates a flash loan and executes the arbitrage logic.
+     * This function is for testing purposes only and does not involve
+     * an actual flash loan from Aave. It directly provides the
+     * loaned amount and asset to trigger the arbitrage flow.
+     * @param _loanedAsset The address of the token that is 'flash loaned'.
+     * @param _loanedAmount The amount of the token that is 'flash loaned'.
+     * @return bool True if the arbitrage was profitable and executed, false otherwise.
      */
-    function executeOperation(
-        address asset,
-        uint256 amount,
-        uint256 premium,
-        address, //address initiator,
-        bytes calldata
-        //bytes calldata params
-    ) external override returns (bool) {
-        // Ensure the flash loan asset is one of the tokens involved in arbitrage
-        // This example assumes the flash loan is taken in USDC or DAI for simplicity
-        require(asset == usdcAddress || asset == daiAddress, "Unexpected flash loan asset");
+    function testArbitrage(address _loanedAsset, uint256 _loanedAmount) external returns (bool) {
+        require(_loanedAsset != address(0), "FLA: Zero loaned asset");
+        require(_loanedAmount > 0, "FLA: Zero loaned amount");
 
-        // The logic here needs to be more robust.
-        // If 'asset' is USDC, then deposit USDC to Dex, buy DAI, sell DAI for USDC, repay.
-        // If 'asset' is DAI, then deposit DAI to Dex, sell DAI for USDC, buy DAI for USDC, repay.
-        // The current logic in the provided `executeOperation` assumes the arbitrage
-        // starts with USDC, but the flash loan could be in either.
+        // Simulate receiving the flash loaned amount
+        // For testing, we assume the contract already holds this amount.
+        // In a real flash loan, Aave would transfer tokens here.
 
-        // For simplicity, let's assume the flash loan is taken in USDC for this example
-        // The 'amount' variable holds the USDC received from the flash loan.
+        // Get initial balance of the loaned asset in this contract
+        uint256 initialBalance = IERC20(_loanedAsset).balanceOf(address(this));
+        require(initialBalance >= _loanedAmount, "FLA: Insufficient balance for simulated loan");
 
-        // 1. Approve Dex to spend the flash-loaned USDC
-        IERC20(asset).approve(dexContractAddress, amount);
-        
-        // 2. Deposit flash-loaned USDC into Dex
-        // This line assumes 'asset' is USDC. If it could be DAI, you'd need a conditional.
-        dexContract.depositUSDC(amount);
+        // Determine which pair to trade (DAI/USDC or USDC/DAI)
+        // This is a simplified example. A real bot would check multiple DEXes and pairs.
+        if (_loanedAsset == DAI_ADDRESS) {
+            // Scenario 1: Borrowed DAI, try to arbitrage DAI/USDC
+            // Buy USDC with DAI, then sell USDC for DAI
+            uint256 amountOutFromBuy = dex.buyToken(DAI_ADDRESS, USDC_ADDRESS, _loanedAmount);
+            require(amountOutFromBuy > 0, "FLA: Buy operation failed or yielded zero");
 
-        // 3. Buy DAI with the deposited USDC
-        dexContract.buyDAI(); // This consumes the deposited USDC balance in the Dex
+            // Approve DEX to spend the received USDC
+            IERC20(USDC_ADDRESS).approve(address(dex), amountOutFromBuy);
 
-        // 4. Deposit received DAI from the buy operation back into Dex
-        // This transfers the DAI from FlashLoanArbitrage contract to its balance on Dex
-        dexContract.depositDAI(dai.balanceOf(address(this))); 
+            uint256 finalAmountOfTokenA = dex.sellToken(USDC_ADDRESS, DAI_ADDRESS, amountOutFromBuy);
+            require(finalAmountOfTokenA > 0, "FLA: Sell operation failed or yielded zero");
 
-        // 5. Sell DAI for USDC
-        // This consumes the deposited DAI balance in the Dex
-        dexContract.sellDAI(); 
-        
-        // At this point, the FlashLoanArbitrage contract should have a USDC balance
-        // that's hopefully more than the 'amountOwed' if arbitrage was profitable.
+            return _checkProfitAndEmit(DAI_ADDRESS, _loanedAmount, finalAmountOfTokenA);
 
-        // Repay the flash loan
-        uint256 amountOwed = amount + premium;
-        IERC20(asset).approve(address(POOL), amountOwed); // Approve Aave Pool to pull funds
+        } else if (_loanedAsset == USDC_ADDRESS) {
+            // Scenario 2: Borrowed USDC, try to arbitrage USDC/DAI
+            // Buy DAI with USDC, then sell DAI for USDC
+            uint256 amountOutFromBuy = dex.buyToken(USDC_ADDRESS, DAI_ADDRESS, _loanedAmount);
+            require(amountOutFromBuy > 0, "FLA: Buy operation failed or yielded zero");
 
-        // Transfer profit to owner (optional, but good practice)
-        // This assumes profit is in the 'asset' token
-        uint256 currentBalance = IERC20(asset).balanceOf(address(this));
-        if (currentBalance > amountOwed) {
-            IERC20(asset).transfer(owner, currentBalance - amountOwed);
+            // Approve DEX to spend the received DAI
+            IERC20(DAI_ADDRESS).approve(address(dex), amountOutFromBuy);
+
+            uint256 finalAmountOfTokenA = dex.sellToken(DAI_ADDRESS, USDC_ADDRESS, amountOutFromBuy);
+            require(finalAmountOfTokenA > 0, "FLA: Sell operation failed or yielded zero");
+
+            return _checkProfitAndEmit(USDC_ADDRESS, _loanedAmount, finalAmountOfTokenA);
+
+        } else {
+            revert("FLA: Unexpected flash loan asset for arbitrage");
         }
-
-        return true;
     }
 
-    function requestFlashLoan(address _token, uint256 _amount) public {
-        address receiverAddress = address(this);
-        address asset = _token;
-        uint256 amount = _amount;
-        bytes memory params = "";
-        uint16 referralCode = 0;
+    /**
+     * @notice Internal function to calculate profit and emit event.
+     * @param _assetBorrowed The address of the token that was borrowed.
+     * @param _amountBorrowed The initial amount borrowed.
+     * @param _finalAmountOfAsset The final amount of the borrowed asset after trades.
+     * @return bool True if profitable, false otherwise.
+     */
+    function _checkProfitAndEmit(
+        address _assetBorrowed,
+        uint256 _amountBorrowed,
+        uint256 _finalAmountOfAsset
+    ) internal returns (bool) {
+        // For simplicity in testing, let's assume a fixed fee percentage for now, e.g., 0.09%
+        // Aave V3 flash loan fee is 0.09% = 9 basis points (0.0009)
+        // Fee = amountBorrowed * 9 / 10000
+        uint256 flashLoanFee = (_amountBorrowed * 9) / 10000;
+        uint256 amountToRepay = _amountBorrowed + flashLoanFee;
 
-        POOL.flashLoanSimple(
-            receiverAddress,
-            asset,
-            amount,
-            params,
-            referralCode
+        int256 profit = int256(_finalAmountOfAsset) - int256(amountToRepay);
+
+        // Check for profitability against a threshold
+        // (finalAmountOfTokenA * 10000) > (amountToRepay * (10000 + PROFIT_THRESHOLD))
+        bool isProfitable = (_finalAmountOfAsset * 10000) > (amountToRepay * (10000 + PROFIT_THRESHOLD));
+
+        // Emit event with results
+        emit ArbitrageExecuted(
+            _assetBorrowed,
+            _amountBorrowed,
+            _amountBorrowed, // Initial balance of loaned asset in contract (simulated)
+            _finalAmountOfAsset, // Final balance of loaned asset in contract
+            profit
         );
+
+        return isProfitable;
     }
 
-    function approveUSDC(uint256 _amount) external returns (bool) {
-        return usdc.approve(dexContractAddress, _amount);
-    }
-
-    function allowanceUSDC() external view returns (uint256) {
-        return usdc.allowance(address(this), dexContractAddress);
-    }
-
-    function approveDAI(uint256 _amount) external returns (bool) {
-        return dai.approve(dexContractAddress, _amount);
-    }
-
-    function allowanceDAI() external view returns (uint256) {
-        return dai.allowance(address(this), dexContractAddress);
-    }
-
-    function getBalance(address _tokenAddress) external view returns (uint256) {
-        return IERC20(_tokenAddress).balanceOf(address(this));
-    }
-
-    function withdraw(address _tokenAddress) external onlyOwner {
+    /**
+     * @notice Allows the owner to withdraw any ERC20 tokens from the contract.
+     * Useful for funding the contract for testing or withdrawing profits.
+     * @param _tokenAddress The address of the ERC20 token to withdraw.
+     */
+    function withdrawToken(address _tokenAddress) external {
+        // In a real scenario, you'd add an `onlyOwner` modifier here.
+        // For testing, we'll keep it simple to allow easy funding/withdrawal.
         IERC20 token = IERC20(_tokenAddress);
         token.transfer(msg.sender, token.balanceOf(address(this)));
     }
 
-    modifier onlyOwner() {
-        require(
-            msg.sender == owner,
-            "Only the contract owner can call this function"
-        );
-        _;
-    }
-
+    // Fallback function to receive ETH (if needed for gas, though not for flash loan itself)
     receive() external payable {}
 }
