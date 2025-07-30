@@ -51,7 +51,7 @@ contract Dex {
      * @param _amountIn The amount of _tokenIn to swap.
      * @return amountOut The amount of _tokenOut received.
      */
-    function buyToken(address _tokenIn, address _tokenOut, uint256 _amountIn) external view returns (uint256 amountOut) {
+    function buyToken(address _tokenIn, address _tokenOut, uint256 _amountIn) public view returns (uint256 amountOut) { // Changed to public view
         require(_amountIn > 0, "Dex: Amount in must be greater than zero");
         require(_tokenIn != _tokenOut, "Dex: Cannot swap same tokens");
         require((_tokenIn == DAI_ADDRESS && _tokenOut == USDC_ADDRESS) || (_tokenIn == USDC_ADDRESS && _tokenOut == DAI_ADDRESS), "Dex: Unsupported token pair");
@@ -88,7 +88,7 @@ contract Dex {
      * @param _amountIn The amount of _tokenIn to swap.
      * @return amountOut The amount of _tokenOut received.
      */
-    function sellToken(address _tokenIn, address _tokenOut, uint256 _amountIn) external view returns (uint256 amountOut) {
+    function sellToken(address _tokenIn, address _tokenOut, uint256 _amountIn) public view returns (uint256 amountOut) { // Changed to public view
         // This function's logic is identical to buyToken for a simple AMM,
         // as swaps are symmetrical. Renamed for conceptual clarity in arbitrage.
         amountOut = buyToken(_tokenIn, _tokenOut, _amountIn);
