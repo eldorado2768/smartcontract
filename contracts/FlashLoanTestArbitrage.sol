@@ -10,7 +10,9 @@ contract FlashLoanArbitrageTest {
     MockERC20 public dai;
     MockERC20 public usdc;
 
-    constructor(address _dex, address _dai, address _usdc) {
+    // The constructor now uses 'address payable' for the Dex contract's address
+    // because Dex.sol likely has a payable fallback or receive function.
+    constructor(address payable _dex, address _dai, address _usdc) {
         dex = Dex(_dex);
         dai = MockERC20(_dai);
         usdc = MockERC20(_usdc);
@@ -28,7 +30,10 @@ contract FlashLoanArbitrageTest {
         // Ensure the contract has enough balance to simulate the flash loan
         uint256 startBalance = IERC20(_loanedAsset).balanceOf(address(this));
         
-        // Initiate the flash loan from the Dex.sol contract
+        // This function call assumes your Dex.sol contract has a public 'flashLoan' function
+        // with the signature: flashLoan(address _token, uint256 _amount, address _borrower)
+        // If you are still getting a "member not found" error, please check the Dex.sol file
+        // to ensure the flashLoan function exists and is correctly defined.
         dex.flashLoan(_loanedAsset, _loanedAmount, address(this));
 
         // After the flash loan and arbitrage, check the final balance
