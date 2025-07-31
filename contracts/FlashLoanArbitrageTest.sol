@@ -80,17 +80,10 @@ contract FlashLoanArbitrageTest {
         
         // --- Arbitrage logic ends here ---
         
-        // Calculate the profit from the swaps
-        int256 profit = int256(amountOut2) - int256(_loanedAmount);
-
-        // Repay the loan plus the fee, and potentially collect the profit
+        // Repay the loan plus the fee
         uint256 repaymentAmount = _loanedAmount + (_loanedAmount * dex.SWAP_FEE() / 10000);
-        uint256 finalRepayment = (profit > 0) ? (repaymentAmount - uint256(profit)) : (repaymentAmount);
 
-        // The final balance of the contract should be the initial funding plus the profit after repayment.
-        // The loan is repaid inside the Dex.flashLoan function, so the contract's balance will be updated automatically
-        // after this function finishes.
-
-        IERC20(loanedToken).transfer(msg.sender, repaymentAmount);
+        // The remaining balance is the profit which stays in the contract
+        IERC20(loanedToken).safeTransfer(msg.sender, repaymentAmount);
     }
 }
