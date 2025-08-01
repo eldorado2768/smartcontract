@@ -73,7 +73,7 @@ contract Dex {
         borrower.executeFlashLoan(_token, _amount);
 
         // After the borrower finishes, it must have sent back the loan plus the fee.
-        uint256 repaymentAmount = _amount + (_amount * SWAP_FEE() / 10000);
+        uint256 repaymentAmount = _amount + (_amount * SWAP_FEE / 10000);
         
         require(IERC20(_token).balanceOf(address(this)) >= repaymentAmount, "Flash loan repayment failed");
     }
