@@ -4,8 +4,11 @@ pragma solidity >=0.8.20;
 import "./Dex.sol";
 import "./MockERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 contract FlashLoanArbitrageTest {
+    using SafeERC20 for IERC20;
+
     Dex public dex;
     MockERC20 public dai;
     MockERC20 public usdc;
@@ -32,8 +35,6 @@ contract FlashLoanArbitrageTest {
         
         // This function call assumes your Dex.sol contract has a public 'flashLoan' function
         // with the signature: flashLoan(address _token, uint256 _amount, address _borrower)
-        // If you are still getting a "member not found" error, please check the Dex.sol file
-        // to ensure the flashLoan function exists and is correctly defined.
         dex.flashLoan(_loanedAsset, _loanedAmount, address(this));
 
         // After the flash loan and arbitrage, check the final balance
@@ -81,7 +82,7 @@ contract FlashLoanArbitrageTest {
         // --- Arbitrage logic ends here ---
         
         // Repay the loan plus the fee
-        uint256 repaymentAmount = _loanedAmount + (_loanedAmount * dex.SWAP_FEE() / 10000);
+        uint256 repaymentAmount = _loanedAmount + (_loanedAmount * dex.SWAP_FEE / 10000);
 
         // The remaining balance is the profit which stays in the contract
         IERC20(loanedToken).safeTransfer(msg.sender, repaymentAmount);
