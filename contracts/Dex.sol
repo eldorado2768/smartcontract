@@ -13,7 +13,9 @@ contract Dex {
     uint256 public usdcReserve;
     IERC20 public dai;
     IERC20 public usdc;
-    address public flashLoaner;
+
+    // We no longer need the flashLoaner variable here,
+    // as we pass the borrower's address to the flashLoan function.
 
     constructor(address _dai, address _usdc) {
         dai = IERC20(_dai);
