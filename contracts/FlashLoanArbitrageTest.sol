@@ -64,13 +64,13 @@ contract FlashLoanArbitrageTest {
         // --- Arbitrage logic starts here ---
         
         // Approve the Dex to spend the borrowed token
-        IERC20(loanedToken).safeApprove(address(dex), _loanedAmount);
+        IERC20(loanedToken).approve(address(dex), _loanedAmount);
 
         // Step 1: Swap the loaned token for the other token
         uint256 amountOut1 = dex.swap(loanedToken, address(usdc), _loanedAmount);
         
         // Step 2: Approve the Dex to spend the USDC we just received
-        usdc.safeApprove(address(dex), amountOut1);
+        IERC20(address(usdc)).approve(address(dex), amountOut1);
 
         // Step 3: Swap the received token back to the original loaned token.
         dex.swap(address(usdc), loanedToken, amountOut1);
