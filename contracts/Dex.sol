@@ -14,9 +14,6 @@ contract Dex {
     IERC20 public dai;
     IERC20 public usdc;
 
-    // We no longer need the flashLoaner variable here,
-    // as we pass the borrower's address to the flashLoan function.
-
     constructor(address _dai, address _usdc) {
         dai = IERC20(_dai);
         usdc = IERC20(_usdc);
@@ -65,16 +62,12 @@ contract Dex {
         return amountOut;
     }
 
-    // This is the flash loan function needed by FlashLoanArbitrageTest.sol
     function flashLoan(address _token, uint256 _amount, address _borrower) public {
         IERC20(_token).safeTransfer(_borrower, _amount);
         
-        // This is a crucial line. We need to tell the borrower contract to execute its logic.
-        // We'll call the `executeFlashLoan` function on the borrower contract.
         IFlashLoanBorrower borrower = IFlashLoanBorrower(_borrower);
         borrower.executeFlashLoan(_token, _amount);
 
-        // After the borrower finishes, it must have sent back the loan plus the fee.
         uint256 repaymentAmount = _amount + (_amount * SWAP_FEE / 10000);
         
         require(IERC20(_token).balanceOf(address(this)) >= repaymentAmount, "Flash loan repayment failed");
