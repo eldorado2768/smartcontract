@@ -7,6 +7,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 contract FlashLoanArbitrageTest {
+    // This line is essential for safeApprove and other safe functions to work.
     using SafeERC20 for IERC20;
 
     Dex public dex;
