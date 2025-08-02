@@ -13,8 +13,6 @@ contract FlashLoanArbitrageTest {
     MockERC20 public dai;
     MockERC20 public usdc;
 
-    // The constructor now uses 'address payable' for the Dex contract's address
-    // because Dex.sol likely has a payable fallback or receive function.
     constructor(address payable _dex, address _dai, address _usdc) {
         dex = Dex(_dex);
         dai = MockERC20(_dai);
@@ -30,24 +28,19 @@ contract FlashLoanArbitrageTest {
     );
 
     function testArbitrage(address _loanedAsset, uint256 _loanedAmount) public returns (bool) {
-        // Ensure the contract has enough balance to simulate the flash loan
         uint256 startBalance = IERC20(_loanedAsset).balanceOf(address(this));
         
-        // This function call assumes your Dex.sol contract has a public 'flashLoan' function
-        // with the signature: flashLoan(address _token, uint256 _amount, address _borrower)
         dex.flashLoan(_loanedAsset, _loanedAmount, address(this));
 
-        // After the flash loan and arbitrage, check the final balance
         uint256 finalBalance = IERC20(_loanedAsset).balanceOf(address(this));
         
-        // The profit is the difference between the final balance and the initial balance
         int256 profit = int256(finalBalance) - int256(startBalance);
 
         emit ArbitrageExecuted(
             _loanedAsset,
             _loanedAmount,
             finalBalance,
-            0, // We are no longer tracking 'received' since the repayment logic is now fully contained within the loan callback.
+            0,
             profit
         );
 
@@ -57,15 +50,11 @@ contract FlashLoanArbitrageTest {
     function executeFlashLoan(address _loanedAsset, uint256 _loanedAmount) external {
         require(msg.sender == address(dex), "Only Dex can call this");
         
-        uint256 daiAmount;
-        uint256 usdcAmount;
         address loanedToken;
         
         if (_loanedAsset == address(dai)) {
-            daiAmount = _loanedAmount;
             loanedToken = address(dai);
         } else if (_loanedAsset == address(usdc)) {
-            usdcAmount = _loanedAmount;
             loanedToken = address(usdc);
         } else {
             revert("Unsupported token for flash loan");
@@ -73,16 +62,22 @@ contract FlashLoanArbitrageTest {
         
         // --- Arbitrage logic starts here ---
         
-        // Step 1: Swap loaned DAI for USDC
+        // Approve the Dex to spend the borrowed token
+        IERC20(loanedToken).safeApprove(address(dex), _loanedAmount);
+
+        // Step 1: Swap the loaned token for the other token
         uint256 amountOut1 = dex.swap(loanedToken, address(usdc), _loanedAmount);
         
-        // Step 2: Swap the received USDC back to DAI
-        uint256 amountOut2 = dex.swap(address(usdc), loanedToken, amountOut1);
+        // Step 2: Approve the Dex to spend the USDC we just received
+        usdc.safeApprove(address(dex), amountOut1);
+
+        // Step 3: Swap the received token back to the original loaned token.
+        dex.swap(address(usdc), loanedToken, amountOut1);
         
         // --- Arbitrage logic ends here ---
         
         // Repay the loan plus the fee
-        uint256 repaymentAmount = _loanedAmount + (_loanedAmount * dex.SWAP_FEE / 10000);
+        uint256 repaymentAmount = _loanedAmount + (_loanedAmount * dex.SWAP_FEE() / 10000);
 
         // The remaining balance is the profit which stays in the contract
         IERC20(loanedToken).safeTransfer(msg.sender, repaymentAmount);
